@@ -1,214 +1,203 @@
+// src/calculations.ts
+
 export type TipoVenda = 'credito' | 'pronto';
 export type ObjetivoMargem = 'eur' | 'percent';
 
-const IVA_DIVISOR = 0.23;
-const TAXA_CREDITO = 0.065;
-const AJUSTE_PRONTO = 0.95;
-
 export interface ResultadoMargem {
+  margem: number;
+  margemPercent: number | null;
   ivaMargem: number;
   custoCredito: number;
   receitaLiquidaVenda: number;
-  margem: number;
-  margemPercent: number | null;
   warnings: string[];
-}
-
-export interface SolverParams {
-  precoVenda: number;
-  tipoVenda: TipoVenda;
-  incluirCustoCredito: boolean;
-  objetivoTipo: ObjetivoMargem;
-  objetivoValor: number;
-  tolerancia?: number;
-  maxIteracoes?: number;
 }
 
 export interface SolverResultado {
   sucesso: boolean;
   precoCompraMax: number | null;
-  margemCalculada: number | null;
-  margemPercentCalculada: number | null;
   iteracoes: number;
   mensagem: string;
 }
 
-export const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
+interface SolverParams {
+  precoVenda: number;
+  tipoVenda: TipoVenda;
+  incluirCustoCredito: boolean;
+  objetivoTipo: ObjetivoMargem;
+  objetivoValor: number; // EUR ou fração (ex: 0.2 para 20%)
+  tolerancia?: number;
+  maxIteracoes?: number;
+}
 
-export const calcIvaMargem = (precoVenda: number, precoCompra: number): number =>
-  (precoVenda - precoCompra) / IVA_DIVISOR;
+/* =========================
+   Helpers
+========================= */
 
-export const calcCredito = (precoVenda: number): number => TAXA_CREDITO * precoVenda;
+export const round2 = (n: number): number =>
+  Math.round((n + Number.EPSILON) * 100) / 100;
 
-const generateWarnings = (precoVenda: number, precoCompra: number, margem: number): string[] => {
-  const warnings: string[] = [];
-
-  if (precoCompra >= precoVenda) {
-    warnings.push('Preço de compra maior ou igual ao preço de venda: a margem tende a ser negativa.');
-  }
-
-  if (precoCompra <= 0) {
-    warnings.push('Preço de compra deve ser maior que 0 para calcular margem %.');
-  }
-
-  if (margem < 0) {
-    warnings.push('Atenção: a margem calculada está negativa.');
-  }
-
-  return warnings;
+export const formatCurrency = (n: number | null): string => {
+  if (n === null || !Number.isFinite(n)) return '--';
+  return n.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
 };
+
+export const formatPercent = (n: number | null): string => {
+  if (n === null || !Number.isFinite(n)) return '--';
+  return `${n.toFixed(2)}%`;
+};
+
+/* =========================
+   IVA da margem (REGRA NOVA)
+   IVA = (margemBruta - margemBruta / 0.23)
+========================= */
+
+const calcIvaMargem = (precoVenda: number, precoCompra: number): number => {
+  const margemBruta = precoVenda - precoCompra;
+  return margemBruta - margemBruta / 0.23;
+};
+
+/* =========================
+   Margem – Crédito
+========================= */
 
 export const calcMargemCredito = (
   precoVenda: number,
   precoCompra: number,
   incluirCustoCredito: boolean
 ): ResultadoMargem => {
+  const warnings: string[] = [];
+
+  const custoCredito = incluirCustoCredito ? precoVenda * 0.065 : 0;
   const ivaMargem = calcIvaMargem(precoVenda, precoCompra);
-  const custoCredito = incluirCustoCredito ? calcCredito(precoVenda) : 0;
-  const margem = precoVenda - custoCredito - ivaMargem - precoCompra;
-  const margemPercent = precoCompra > 0 ? margem / precoCompra : null;
+
+  const margem =
+    precoVenda -
+    custoCredito -
+    ivaMargem -
+    precoCompra;
+
+  const margemPercent =
+    precoCompra > 0 ? margem / precoCompra : null;
+
+  if (margem < 0) {
+    warnings.push('Atenção: a margem calculada está negativa.');
+  }
 
   return {
+    margem,
+    margemPercent,
     ivaMargem,
     custoCredito,
-    receitaLiquidaVenda: precoVenda,
-    margem,
-    margemPercent,
-    warnings: generateWarnings(precoVenda, precoCompra, margem)
+    receitaLiquidaVenda: precoVenda - custoCredito,
+    warnings,
   };
 };
 
-export const calcMargemPronto = (precoVenda: number, precoCompra: number): ResultadoMargem => {
+/* =========================
+   Margem – Pronto pagamento
+========================= */
+
+export const calcMargemPronto = (
+  precoVenda: number,
+  precoCompra: number
+): ResultadoMargem => {
+  const warnings: string[] = [];
+
+  const receitaLiquida = precoVenda * 0.95;
   const ivaMargem = calcIvaMargem(precoVenda, precoCompra);
-  const receitaLiquidaVenda = AJUSTE_PRONTO * precoVenda;
-  const margem = receitaLiquidaVenda - ivaMargem - precoCompra;
-  const margemPercent = precoCompra > 0 ? margem / precoCompra : null;
+
+  const margem =
+    receitaLiquida -
+    ivaMargem -
+    precoCompra;
+
+  const margemPercent =
+    precoCompra > 0 ? margem / precoCompra : null;
+
+  if (margem < 0) {
+    warnings.push('Atenção: a margem calculada está negativa.');
+  }
 
   return {
-    ivaMargem,
-    custoCredito: 0,
-    receitaLiquidaVenda,
     margem,
     margemPercent,
-    warnings: generateWarnings(precoVenda, precoCompra, margem)
+    ivaMargem,
+    custoCredito: 0,
+    receitaLiquidaVenda: receitaLiquida,
+    warnings,
   };
 };
 
-const calcByTipo = (
-  precoVenda: number,
-  precoCompra: number,
-  tipoVenda: TipoVenda,
-  incluirCustoCredito: boolean
-): ResultadoMargem => {
-  if (tipoVenda === 'credito') {
-    return calcMargemCredito(precoVenda, precoCompra, incluirCustoCredito);
-  }
+/* =========================
+   Solver – Preço máx. compra
+========================= */
 
-  return calcMargemPronto(precoVenda, precoCompra);
-};
+export const solverPrecoCompraMax = (
+  params: SolverParams
+): SolverResultado => {
+  const {
+    precoVenda,
+    tipoVenda,
+    incluirCustoCredito,
+    objetivoTipo,
+    objetivoValor,
+    tolerancia = 0.01,
+    maxIteracoes = 200,
+  } = params;
 
-export const solverPrecoCompraMax = ({
-  precoVenda,
-  tipoVenda,
-  incluirCustoCredito,
-  objetivoTipo,
-  objetivoValor,
-  tolerancia = 0.01,
-  maxIteracoes = 200
-}: SolverParams): SolverResultado => {
-  if (precoVenda <= 0 || objetivoValor < 0) {
-    return {
-      sucesso: false,
-      precoCompraMax: null,
-      margemCalculada: null,
-      margemPercentCalculada: null,
-      iteracoes: 0,
-      mensagem: 'Parâmetros inválidos: preço de venda deve ser > 0 e objetivo >= 0.'
-    };
-  }
-
-  const lower = 0;
-  const upper = precoVenda;
-
-  const diffToTarget = (precoCompra: number): number => {
-    const r = calcByTipo(precoVenda, precoCompra, tipoVenda, incluirCustoCredito);
-    if (objetivoTipo === 'eur') {
-      return r.margem - objetivoValor;
-    }
-
-    if (precoCompra <= 0 || r.margemPercent === null) {
-      return Number.POSITIVE_INFINITY;
-    }
-
-    return r.margemPercent - objetivoValor;
-  };
-
-  const lowVal = diffToTarget(lower + 1e-9);
-  const highVal = diffToTarget(upper);
-
-  if (!Number.isFinite(lowVal) || !Number.isFinite(highVal) || lowVal < 0 || highVal > 0) {
-    return {
-      sucesso: false,
-      precoCompraMax: null,
-      margemCalculada: null,
-      margemPercentCalculada: null,
-      iteracoes: 0,
-      mensagem: 'Objetivo de margem inalcançável no intervalo [0, PreçoVenda].'
-    };
-  }
-
-  let left = lower;
-  let right = upper;
+  let low = 0;
+  let high = precoVenda;
   let mid = 0;
-  let iter = 0;
 
-  while (iter < maxIteracoes) {
-    mid = (left + right) / 2;
-    const value = diffToTarget(mid);
+  for (let i = 0; i < maxIteracoes; i++) {
+    mid = (low + high) / 2;
 
-    if (Math.abs(value) <= tolerancia || Math.abs(right - left) <= tolerancia) {
-      const finalResult = calcByTipo(precoVenda, mid, tipoVenda, incluirCustoCredito);
+    const resultado =
+      tipoVenda === 'credito'
+        ? calcMargemCredito(precoVenda, mid, incluirCustoCredito)
+        : calcMargemPronto(precoVenda, mid);
+
+    const margemAtual =
+      objetivoTipo === 'percent'
+        ? resultado.margemPercent
+        : resultado.margem;
+
+    if (margemAtual === null) {
       return {
-        sucesso: true,
-        precoCompraMax: round2(mid),
-        margemCalculada: round2(finalResult.margem),
-        margemPercentCalculada:
-          finalResult.margemPercent === null ? null : round2(finalResult.margemPercent * 100),
-        iteracoes: iter + 1,
-        mensagem: 'Preço máximo de compra encontrado com sucesso.'
+        sucesso: false,
+        precoCompraMax: null,
+        iteracoes: i,
+        mensagem: 'Margem inválida.',
       };
     }
 
-    if (value > 0) {
-      left = mid;
-    } else {
-      right = mid;
+    const alvo =
+      objetivoTipo === 'percent'
+        ? objetivoValor
+        : objetivoValor;
+
+    const diff = margemAtual - alvo;
+
+    if (Math.abs(diff) <= tolerancia) {
+      return {
+        sucesso: true,
+        precoCompraMax: round2(mid),
+        iteracoes: i + 1,
+        mensagem: 'Preço máximo encontrado com sucesso.',
+      };
     }
 
-    iter += 1;
+    if (diff > 0) {
+      low = mid;
+    } else {
+      high = mid;
+    }
   }
 
-  const finalResult = calcByTipo(precoVenda, mid, tipoVenda, incluirCustoCredito);
   return {
-    sucesso: true,
+    sucesso: false,
     precoCompraMax: round2(mid),
-    margemCalculada: round2(finalResult.margem),
-    margemPercentCalculada: finalResult.margemPercent === null ? null : round2(finalResult.margemPercent * 100),
     iteracoes: maxIteracoes,
-    mensagem: 'Resultado aproximado: limite de iterações atingido.'
+    mensagem: 'Não foi possível atingir o objetivo com a tolerância definida.',
   };
-};
-
-export const formatCurrency = (value: number | null): string =>
-  value === null || Number.isNaN(value)
-    ? '--'
-    : value.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 });
-
-export const formatPercent = (value: number | null): string =>
-  value === null || Number.isNaN(value) ? '--' : `${value.toFixed(2)}%`;
-
-export const constants = {
-  IVA_DIVISOR,
-  TAXA_CREDITO,
-  AJUSTE_PRONTO
 };
