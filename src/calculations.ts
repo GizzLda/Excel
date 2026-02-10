@@ -12,7 +12,7 @@ export interface ResultadoMargem {
   warnings: string[];
 }
 
-export interface SolverResultado {
+export interface ResultadoSolver {
   sucesso: boolean;
   precoCompraMax: number | null;
   iteracoes: number;
@@ -47,17 +47,22 @@ export const formatPercent = (n: number | null): string => {
 };
 
 /* =========================
-   IVA da margem (REGRA NOVA)
-   IVA = (margemBruta - margemBruta / 0.23)
+   IVA da Margem (REGRA FINAL)
+   Base IVA = (precoVenda - precoCompra)
+   IVA incluído: IVA = margemBruta - (margemBruta / 1.23)
+   (custo do crédito NÃO entra no apuramento do IVA)
 ========================= */
 
 const calcIvaMargem = (precoVenda: number, precoCompra: number): number => {
   const margemBruta = precoVenda - precoCompra;
-  return margemBruta - margemBruta / 0.23;
+  if (!Number.isFinite(margemBruta) || margemBruta <= 0) return 0;
+  return margemBruta - margemBruta / 1.23;
 };
 
 /* =========================
-   Margem – Crédito
+   Margem — Crédito
+   Margem = (PV - PC) - IVA_margem - CustoCredito
+   Margem% = Margem / PC
 ========================= */
 
 export const calcMargemCredito = (
@@ -68,20 +73,14 @@ export const calcMargemCredito = (
   const warnings: string[] = [];
 
   const custoCredito = incluirCustoCredito ? precoVenda * 0.065 : 0;
+
   const ivaMargem = calcIvaMargem(precoVenda, precoCompra);
 
-  const margem =
-    precoVenda -
-    custoCredito -
-    ivaMargem -
-    precoCompra;
+  const margem = (precoVenda - precoCompra) - ivaMargem - custoCredito;
 
-  const margemPercent =
-    precoCompra > 0 ? margem / precoCompra : null;
+  const margemPercent = precoCompra > 0 ? margem / precoCompra : null;
 
-  if (margem < 0) {
-    warnings.push('Atenção: a margem calculada está negativa.');
-  }
+  if (margem < 0) warnings.push('Atenção: a margem calculada está negativa.');
 
   return {
     margem,
@@ -94,7 +93,11 @@ export const calcMargemCredito = (
 };
 
 /* =========================
-   Margem – Pronto pagamento
+   Margem — Pronto pagamento
+   Receita líquida = 0.95 * PV
+   IVA continua a ser calculado sobre (PV - PC)
+   Margem = (0.95*PV) - IVA_margem - PC
+   Margem% = Margem / PC
 ========================= */
 
 export const calcMargemPronto = (
@@ -103,38 +106,35 @@ export const calcMargemPronto = (
 ): ResultadoMargem => {
   const warnings: string[] = [];
 
-  const receitaLiquida = precoVenda * 0.95;
+  const receitaLiquidaVenda = precoVenda * 0.95;
+
   const ivaMargem = calcIvaMargem(precoVenda, precoCompra);
 
-  const margem =
-    receitaLiquida -
-    ivaMargem -
-    precoCompra;
+  const margem = receitaLiquidaVenda - ivaMargem - precoCompra;
 
-  const margemPercent =
-    precoCompra > 0 ? margem / precoCompra : null;
+  const margemPercent = precoCompra > 0 ? margem / precoCompra : null;
 
-  if (margem < 0) {
-    warnings.push('Atenção: a margem calculada está negativa.');
-  }
+  if (margem < 0) warnings.push('Atenção: a margem calculada está negativa.');
 
   return {
     margem,
     margemPercent,
     ivaMargem,
     custoCredito: 0,
-    receitaLiquidaVenda: receitaLiquida,
+    receitaLiquidaVenda,
     warnings,
   };
 };
 
 /* =========================
-   Solver – Preço máx. compra
+   Solver — Preço máximo de compra
+   Encontra o maior precoCompra tal que:
+     - objetivoTipo='eur'     => margem >= objetivoValor
+     - objetivoTipo='percent' => margemPercent >= objetivoValor
+   (objetivoValor em percent deve ser dado em FRAÇÃO: 0.20 = 20%)
 ========================= */
 
-export const solverPrecoCompraMax = (
-  params: SolverParams
-): SolverResultado => {
+export const solverPrecoCompraMax = (params: SolverParams): ResultadoSolver => {
   const {
     precoVenda,
     tipoVenda,
@@ -145,59 +145,70 @@ export const solverPrecoCompraMax = (
     maxIteracoes = 200,
   } = params;
 
+  if (!Number.isFinite(precoVenda) || precoVenda <= 0) {
+    return {
+      sucesso: false,
+      precoCompraMax: null,
+      iteracoes: 0,
+      mensagem: 'Preço de venda inválido.',
+    };
+  }
+
   let low = 0;
-  let high = precoVenda;
-  let mid = 0;
+  let high = precoVenda; // não faz sentido comprar acima do PV
+  let best: number | null = null;
+
+  const getResultado = (precoCompra: number) => {
+    return tipoVenda === 'credito'
+      ? calcMargemCredito(precoVenda, precoCompra, incluirCustoCredito)
+      : calcMargemPronto(precoVenda, precoCompra);
+  };
+
+  const diffObjetivo = (precoCompra: number): number => {
+    const r = getResultado(precoCompra);
+    if (objetivoTipo === 'eur') return r.margem - objetivoValor;
+
+    if (r.margemPercent === null) return -Infinity;
+    return r.margemPercent - objetivoValor;
+  };
 
   for (let i = 0; i < maxIteracoes; i++) {
-    mid = (low + high) / 2;
+    const mid = (low + high) / 2;
+    const diff = diffObjetivo(mid);
 
-    const resultado =
-      tipoVenda === 'credito'
-        ? calcMargemCredito(precoVenda, mid, incluirCustoCredito)
-        : calcMargemPronto(precoVenda, mid);
-
-    const margemAtual =
-      objetivoTipo === 'percent'
-        ? resultado.margemPercent
-        : resultado.margem;
-
-    if (margemAtual === null) {
-      return {
-        sucesso: false,
-        precoCompraMax: null,
-        iteracoes: i,
-        mensagem: 'Margem inválida.',
-      };
-    }
-
-    const alvo =
-      objetivoTipo === 'percent'
-        ? objetivoValor
-        : objetivoValor;
-
-    const diff = margemAtual - alvo;
-
-    if (Math.abs(diff) <= tolerancia) {
-      return {
-        sucesso: true,
-        precoCompraMax: round2(mid),
-        iteracoes: i + 1,
-        mensagem: 'Preço máximo encontrado com sucesso.',
-      };
-    }
-
-    if (diff > 0) {
+    // Já atingimos objetivo => podemos tentar comprar mais caro
+    if (diff >= 0) {
+      best = mid;
       low = mid;
     } else {
       high = mid;
     }
+
+    // Para objetivo EUR, tolerância é em EUR; para percent é em FRAÇÃO (ex: 0.001 = 0.1pp)
+    if (Math.abs(diff) <= tolerancia) {
+      best = mid;
+      return {
+        sucesso: true,
+        precoCompraMax: round2(best),
+        iteracoes: i + 1,
+        mensagem: 'Preço máximo encontrado com sucesso.',
+      };
+    }
+  }
+
+  if (best === null) {
+    return {
+      sucesso: false,
+      precoCompraMax: null,
+      iteracoes: maxIteracoes,
+      mensagem: 'Objetivo impossível com os parâmetros atuais.',
+    };
   }
 
   return {
-    sucesso: false,
-    precoCompraMax: round2(mid),
+    sucesso: true,
+    precoCompraMax: round2(best),
     iteracoes: maxIteracoes,
-    mensagem: 'Não foi possível atingir o objetivo com a tolerância definida.',
+    mensagem: 'Preço máximo aproximado encontrado.',
   };
 };
