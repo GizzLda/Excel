@@ -1,6 +1,10 @@
 # Calculador de Margens para Telemóveis Usados (Portugal)
 
+ codex/create-web-app-to-analyze-mobile-price-margins-7qrwkk
 Aplicação web em **React + TypeScript + Vite** para calcular margens de revenda de telemóveis usados com regra interna de IVA da margem, com UI em Tailwind e componentes estilo shadcn/ui.
+
+Aplicação web em **React + TypeScript + Vite** para calcular margens de revenda de telemóveis usados com regra interna de IVA da margem.
+ main
 
 ## Funcionalidades
 
@@ -17,6 +21,7 @@ Aplicação web em **React + TypeScript + Vite** para calcular margens de revend
 - Botão **Copiar resumo**.
 - Tabela com 3 cenários de preenchimento rápido.
 
+codex/create-web-app-to-analyze-mobile-price-margins-7qrwkk
 
 ## UI e design system
 
@@ -24,6 +29,8 @@ Aplicação web em **React + TypeScript + Vite** para calcular margens de revend
 - Componentes locais estilo shadcn/ui em `src/components/ui/` (Card, Button, Input, Select, Switch e Segmented Control).
 - Layout responsivo em 2 colunas no desktop e 1 coluna em mobile.
 
+
+main
 ## Fórmulas implementadas
 
 1. **IVA da margem**
