@@ -1,3 +1,11 @@
+ codex/create-web-app-to-analyze-mobile-price-margins-7qrwkk
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+
 :root {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   color: #111827;
@@ -10,4 +18,5 @@
 
 body {
   margin: 0;
+ main
 }

@@ -1,3 +1,6 @@
+ codex/create-web-app-to-analyze-mobile-price-margins-7qrwkk
+/* Legacy file kept intentionally; styling now uses Tailwind utility classes. */
+
 .container {
   max-width: 1024px;
   margin: 0 auto;
@@ -92,3 +95,4 @@ td {
   text-align: left;
   padding: 8px;
 }
+ main
