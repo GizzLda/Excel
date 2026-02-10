@@ -33,13 +33,13 @@ interface Scenario {
 
 const scenarios: Scenario[] = [
  codex/create-web-app-to-analyze-mobile-price-margins-7qrwkk
-  { nome: 'iPhone 13', precoVenda: 520, precoCompra: 400, tipoVenda: 'credito', incluirCustoCredito: true },
-  { nome: 'Samsung S22', precoVenda: 430, precoCompra: 320, tipoVenda: 'pronto', incluirCustoCredito: false },
-  { nome: 'Xiaomi 12', precoVenda: 300, precoCompra: 220, tipoVenda: 'credito', incluirCustoCredito: false }
+  { nome: 'iPhone 13', precoVenda: 520. precoCompra: 400. tipoVenda: 'credito', incluirCustoCredito: true },
+  { nome: 'Samsung S22', precoVenda: 430. precoCompra: 320. tipoVenda: 'pronto', incluirCustoCredito: false },
+  { nome: 'Xiaomi 12', precoVenda: 300. precoCompra: 220. tipoVenda: 'credito', incluirCustoCredito: false }
 
-  { nome: 'iPhone 13 (Crédito)', precoVenda: 520, precoCompra: 400, tipoVenda: 'credito', incluirCustoCredito: true },
-  { nome: 'Samsung S22 (Pronto)', precoVenda: 430, precoCompra: 320, tipoVenda: 'pronto', incluirCustoCredito: false },
-  { nome: 'Xiaomi 12 (Crédito sem custo)', precoVenda: 300, precoCompra: 220, tipoVenda: 'credito', incluirCustoCredito: false }
+  { nome: 'iPhone 13 (Crédito)', precoVenda: 520. precoCompra: 400. tipoVenda: 'credito', incluirCustoCredito: true },
+  { nome: 'Samsung S22 (Pronto)', precoVenda: 430. precoCompra: 320. tipoVenda: 'pronto', incluirCustoCredito: false },
+  { nome: 'Xiaomi 12 (Crédito sem custo)', precoVenda: 300. precoCompra: 220. tipoVenda: 'credito', incluirCustoCredito: false }
  main
 ];
 
@@ -579,10 +579,10 @@ function App() {
       <section className="card assumptions">
         <h2>Resumo dos pressupostos</h2>
         <ul>
-          <li>IVA da margem = (PreçoVenda - PreçoCompra) / 0,23.</li>
+          <li>IVA da margem = (PreçoVenda - PreçoCompra) / 0.23.</li>
           <li>Crédito: Margem = PreçoVenda - CustoCrédito - IVA - PreçoCompra.</li>
-          <li>Pronto pagamento: Receita líquida = 0,95 × PreçoVenda.</li>
-          <li>Solver por bisseção no intervalo [0, PreçoVenda], tolerância 0,01 EUR e 200 iterações.</li>
+          <li>Pronto pagamento: Receita líquida = 0.95 × PreçoVenda.</li>
+          <li>Solver por bisseção no intervalo [0. PreçoVenda], tolerância 0.01 EUR e 200 iterações.</li>
         </ul>
       </section>
  main
