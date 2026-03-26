@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { calcMargemCredito, calcMargemPronto, calcPrecoVendaPorCusto, solverPrecoCompraMax } from './calculations';
 import { calcMargemCredito, calcMargemPronto, solverPrecoCompraMax } from './calculations';
 
 describe('fórmulas base', () => {
@@ -23,6 +24,7 @@ describe('solver por bisseção', () => {
       tipoVenda: 'credito',
       incluirCustoCredito: true,
       objetivoTipo: 'eur',
+      objetivoValor: -100
       objetivoValor: 40
     });
 
@@ -36,6 +38,7 @@ describe('solver por bisseção', () => {
       tipoVenda: 'pronto',
       incluirCustoCredito: false,
       objetivoTipo: 'percent',
+      objetivoValor: -0.1
       objetivoValor: 0.1
     });
 
@@ -54,5 +57,17 @@ describe('solver por bisseção', () => {
 
     expect(result.sucesso).toBe(false);
     expect(result.mensagem).toContain('inalcançável');
+  });
+});
+
+
+describe('cálculo de preço de venda por custo', () => {
+  it('calcula preço de venda máximo com base na regra de custo', () => {
+    const precoVenda = calcPrecoVendaPorCusto(300);
+    expect(precoVenda).toBeCloseTo((300 + 20.5) / 0.85, 6);
+  });
+
+  it('retorna null para custo negativo', () => {
+    expect(calcPrecoVendaPorCusto(-1)).toBeNull();
   });
 });

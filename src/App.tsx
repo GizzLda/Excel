@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import {
   calcMargemCredito,
   calcMargemPronto,
+  calcPrecoVendaPorCusto,
   formatCurrency,
   formatPercent,
   round2,
   solverPrecoCompraMax,
   type ObjetivoMargem,
+  type TipoVenda
+} from './calculations';
   type TipoVenda,
 } from './calculations';
 
@@ -18,6 +21,7 @@ import { Select } from './components/ui/select';
 import { Switch } from './components/ui/switch';
 import { Toast } from './components/ui/toast';
 
+type Mode = 'margem' | 'solver' | 'precoVenda';
 import './App.css';
 
 type Mode = 'margem' | 'solver';
@@ -31,6 +35,22 @@ interface Scenario {
 }
 
 const scenarios: Scenario[] = [
+  { nome: 'iPhone 13', precoVenda: 520, precoCompra: 400, tipoVenda: 'credito', incluirCustoCredito: true },
+  { nome: 'Samsung S22', precoVenda: 430, precoCompra: 320, tipoVenda: 'pronto', incluirCustoCredito: false },
+  { nome: 'Xiaomi 12', precoVenda: 300, precoCompra: 220, tipoVenda: 'credito', incluirCustoCredito: false }
+];
+
+const parseNumber = (value: string): number => Number(value.replace(',', '.'));
+
+function App() {
+  const [mode, setMode] = useState<Mode>('margem');
+  const [precoVendaInput, setPrecoVendaInput] = useState('500');
+  const [precoCompraInput, setPrecoCompraInput] = useState('350');
+  const [precoCustoInput, setPrecoCustoInput] = useState('300');
+  const [tipoVenda, setTipoVenda] = useState<TipoVenda>('credito');
+  const [incluirCustoCredito, setIncluirCustoCredito] = useState(true);
+  const [objetivoTipo, setObjetivoTipo] = useState<ObjetivoMargem>('eur');
+  const [objetivoValorInput, setObjetivoValorInput] = useState('40');
   { nome: 'iPhone 13 (Crédito)', precoVenda: 520, precoCompra: 400, tipoVenda: 'credito', incluirCustoCredito: true },
   { nome: 'Samsung S22 (Pronto)', precoVenda: 430, precoCompra: 320, tipoVenda: 'pronto', incluirCustoCredito: false },
   { nome: 'Xiaomi 12 (Crédito sem custo)', precoVenda: 300, precoCompra: 220, tipoVenda: 'credito', incluirCustoCredito: false },
@@ -59,6 +79,13 @@ function App() {
 
   const precoVenda = parseNumber(precoVendaInput);
   const precoCompra = parseNumber(precoCompraInput);
+  const precoCusto = parseNumber(precoCustoInput);
+  const objetivoValor = parseNumber(objetivoValorInput);
+
+  const resultadoModo1 = useMemo(() => {
+    if (!Number.isFinite(precoVenda) || !Number.isFinite(precoCompra)) {
+      return null;
+    }
   const objetivoValor = parseNumber(objetivoValorInput);
 
   const resultadoModo1 = useMemo(() => {
@@ -70,6 +97,9 @@ function App() {
   }, [precoVenda, precoCompra, tipoVenda, incluirCustoCredito, calcTrigger]);
 
   const resultadoSolver = useMemo(() => {
+    if (!Number.isFinite(precoVenda) || !Number.isFinite(objetivoValor)) {
+      return null;
+    }
     if (!Number.isFinite(precoVenda) || !Number.isFinite(objetivoValor)) return null;
 
     return solverPrecoCompraMax({
@@ -79,6 +109,14 @@ function App() {
       objetivoTipo,
       objetivoValor: objetivoTipo === 'percent' ? objetivoValor / 100 : objetivoValor,
       tolerancia: 0.01,
+      maxIteracoes: 200
+    });
+  }, [precoVenda, tipoVenda, incluirCustoCredito, objetivoTipo, objetivoValor, calcTrigger]);
+
+  const precoVendaCalculado = useMemo(() => calcPrecoVendaPorCusto(precoCusto), [precoCusto, calcTrigger]);
+
+  const resultadoFinal = mode === 'margem' ? resultadoModo1 : null;
+  const precoCompraEfetivo = mode === 'solver' ? resultadoSolver?.precoCompraMax ?? null : precoCompra;
       maxIteracoes: 200,
     });
   }, [precoVenda, tipoVenda, incluirCustoCredito, objetivoTipo, objetivoValor, calcTrigger]);
@@ -90,6 +128,35 @@ function App() {
         : calcMargemPronto(precoVenda, resultadoSolver.precoCompraMax)
       : null;
 
+  const resultadoVisivel = mode === 'margem' ? resultadoFinal : solverMargemResultado;
+
+  const warningsBase =
+    mode === 'margem'
+      ? resultadoFinal?.warnings ?? []
+      : solverMargemResultado?.warnings ?? (resultadoSolver && !resultadoSolver.sucesso ? [resultadoSolver.mensagem] : []);
+
+  const warnings =
+    mode === 'precoVenda'
+      ? [
+          ...(precoCusto < 0 ? ['Preço de custo tem de ser igual ou superior a 0.'] : []),
+          ...(!Number.isFinite(precoCusto) ? ['Preço de custo inválido.'] : [])
+        ]
+      : warningsBase;
+
+  const summaryText = useMemo(() => {
+    if (mode === 'precoVenda') {
+      return [
+        'Modo: Preço de venda por custo',
+        `Preço custo: ${formatCurrency(precoCusto)}`,
+        'Regra: PreçoCusto >= 0,85 × PreçoVenda - 20,5€',
+        `Preço venda máximo compatível: ${formatCurrency(precoVendaCalculado)}`
+      ].join('\n');
+    }
+
+    const lines = [
+      `Modo: ${mode === 'margem' ? 'Calcular Margem' : 'Preço Máximo de Compra'}`,
+      `Tipo venda: ${tipoVenda === 'credito' ? 'A crédito' : 'Pronto pagamento'}`,
+      `Preço venda: ${formatCurrency(precoVenda)}`
   const resultadoVisivel = mode === 'margem' ? resultadoModo1 : solverMargemResultado;
 
   const precoCompraEfetivo =
@@ -111,6 +178,8 @@ function App() {
       lines.push(`Preço compra: ${formatCurrency(precoCompra)}`);
     } else {
       lines.push(`Objetivo: ${objetivoTipo === 'eur' ? 'Margem em EUR' : 'Margem em %'}`);
+      lines.push(`Valor objetivo: ${objetivoTipo === 'eur' ? formatCurrency(objetivoValor) : `${objetivoValor.toFixed(2)}%`}`);
+      lines.push(`Preço máximo de compra: ${formatCurrency(resultadoSolver?.precoCompraMax ?? null)}`);
       lines.push(
         `Valor objetivo: ${objetivoTipo === 'eur' ? formatCurrency(objetivoValor) : `${objetivoValor.toFixed(2)}%`}`,
       );
@@ -123,6 +192,7 @@ function App() {
       lines.push(`Custo Crédito: ${formatCurrency(round2(resultadoVisivel.custoCredito))}`);
       lines.push(`Margem: ${formatCurrency(round2(resultadoVisivel.margem))}`);
       lines.push(
+        `Margem %: ${resultadoVisivel.margemPercent === null ? '--' : formatPercent(round2(resultadoVisivel.margemPercent * 100))}`
         `Margem %: ${
           resultadoVisivel.margemPercent === null ? '--' : formatPercent(round2(resultadoVisivel.margemPercent * 100))
         }`,
@@ -130,6 +200,18 @@ function App() {
     }
 
     return lines.join('\n');
+  }, [
+    mode,
+    tipoVenda,
+    precoVenda,
+    precoCompra,
+    precoCusto,
+    precoVendaCalculado,
+    objetivoTipo,
+    objetivoValor,
+    resultadoSolver,
+    resultadoVisivel
+  ]);
   }, [mode, tipoVenda, precoVenda, precoCompra, objetivoTipo, objetivoValor, resultadoSolver, resultadoVisivel]);
 
   const handleCopy = async () => {
@@ -146,6 +228,7 @@ function App() {
     setMode('margem');
     setPrecoVendaInput('500');
     setPrecoCompraInput('350');
+    setPrecoCustoInput('300');
     setTipoVenda('credito');
     setIncluirCustoCredito(true);
     setObjetivoTipo('eur');
@@ -174,6 +257,7 @@ function App() {
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <header className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Calculador de Margens · Telemóveis Usados</h1>
+          <p className="text-sm text-slate-600">Ferramenta interna para análise de margem com IVA na margem e cálculo de preço de venda por custo.</p>
           <p className="text-sm text-slate-600">
             Ferramenta interna para análise de margem com IVA na margem e solver de preço máximo de compra.
           </p>
@@ -195,10 +279,58 @@ function App() {
                   options={[
                     { value: 'margem', label: 'Modo 1 · Margem' },
                     { value: 'solver', label: 'Modo 2 · Preço máx. compra' },
+                    { value: 'precoVenda', label: 'Preço venda por custo' }
                   ]}
                 />
               </div>
 
+              {mode !== 'precoVenda' && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase text-slate-500">Tipo de venda</p>
+                  <SegmentedControl
+                    value={tipoVenda}
+                    onValueChange={(value) => {
+                      setTipoVenda(value);
+                      if (value === 'credito') {
+                        setIncluirCustoCredito(true);
+                      }
+                    }}
+                    options={[
+                      { value: 'credito', label: 'A crédito' },
+                      { value: 'pronto', label: 'Pronto pagamento' }
+                    ]}
+                  />
+                </div>
+              )}
+
+              {mode === 'precoVenda' ? (
+                <label className="space-y-2 text-sm font-medium">
+                  Preço de custo (EUR)
+                  <Input type="number" min="0" step="0.01" value={precoCustoInput} onChange={(e) => setPrecoCustoInput(e.target.value)} />
+                </label>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-2 text-sm font-medium">
+                    Preço de Venda (EUR)
+                    <Input type="number" min="0" step="0.01" value={precoVendaInput} onChange={(e) => setPrecoVendaInput(e.target.value)} />
+                  </label>
+
+                  {mode === 'margem' ? (
+                    <label className="space-y-2 text-sm font-medium">
+                      Preço de Compra (EUR)
+                      <Input type="number" step="0.01" value={precoCompraInput} onChange={(e) => setPrecoCompraInput(e.target.value)} />
+                    </label>
+                  ) : (
+                    <label className="space-y-2 text-sm font-medium">
+                      Objetivo de margem
+                      <Select value={objetivoTipo} onChange={(e) => setObjetivoTipo(e.target.value as ObjetivoMargem)}>
+                        <option value="eur">Quero margem em EUR</option>
+                        <option value="percent">Quero margem em %</option>
+                      </Select>
+                    </label>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase text-slate-500">Tipo de venda</p>
                 <SegmentedControl
@@ -251,6 +383,11 @@ function App() {
               {mode === 'solver' && (
                 <label className="space-y-2 text-sm font-medium">
                   {objetivoTipo === 'eur' ? 'Margem desejada (EUR)' : 'Margem desejada (%)'}
+                  <Input type="number" min="0" step="0.01" value={objetivoValorInput} onChange={(e) => setObjetivoValorInput(e.target.value)} />
+                </label>
+              )}
+
+              {mode !== 'precoVenda' && tipoVenda === 'credito' && (
                   <Input
                     type="number"
                     min="0"
@@ -298,6 +435,7 @@ function App() {
                   <CardTitle>Preço máximo de compra</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <p className="text-3xl font-bold text-indigo-700">{formatCurrency(resultadoSolver?.precoCompraMax ?? null)}</p>
                   <p className="text-3xl font-bold text-indigo-700">
                     {formatCurrency(resultadoSolver?.precoCompraMax ?? null)}
                   </p>
@@ -306,6 +444,71 @@ function App() {
               </Card>
             )}
 
+            {mode === 'precoVenda' && (
+              <Card className="border-emerald-200 bg-emerald-50">
+                <CardHeader>
+                  <CardDescription>Resultado principal</CardDescription>
+                  <CardTitle>Preço de venda máximo compatível</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-emerald-700">{formatCurrency(precoVendaCalculado)}</p>
+                  <p className="mt-1 text-sm text-emerald-700/80">Regra aplicada: PreçoCusto ≥ 0,85 × PreçoVenda - 20,5€</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {mode !== 'precoVenda' && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardDescription>Margem</CardDescription>
+                      <CardTitle>{formatCurrency(round2(resultadoVisivel?.margem ?? Number.NaN))}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardDescription>Margem %</CardDescription>
+                      <CardTitle>
+                        {resultadoVisivel?.margemPercent == null ? '--' : formatPercent(round2(resultadoVisivel.margemPercent * 100))}
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardDescription>IVA da Margem</CardDescription>
+                      <CardTitle>{formatCurrency(round2(resultadoVisivel?.ivaMargem ?? Number.NaN))}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  {tipoVenda === 'credito' && (
+                    <Card>
+                      <CardHeader>
+                        <CardDescription>Custo do Crédito</CardDescription>
+                        <CardTitle>{formatCurrency(round2(resultadoVisivel?.custoCredito ?? Number.NaN))}</CardTitle>
+                      </CardHeader>
+                    </Card>
+                  )}
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Breakdown</CardTitle>
+                    <CardDescription>Resumo detalhado dos componentes da margem.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span>+ Receita bruta venda</span><span>{formatCurrency(receitaBruta)}</span></div>
+                    {tipoVenda === 'pronto' && <div className="flex justify-between"><span>- Ajuste pronto (5%)</span><span>{formatCurrency(round2(precoVenda * 0.05))}</span></div>}
+                    {tipoVenda === 'credito' && incluirCustoCredito && (
+                      <div className="flex justify-between"><span>- Custo crédito (6,5%)</span><span>{formatCurrency(round2(resultadoVisivel?.custoCredito ?? 0))}</span></div>
+                    )}
+                    <div className="flex justify-between"><span>- IVA da margem</span><span>{formatCurrency(round2(resultadoVisivel?.ivaMargem ?? 0))}</span></div>
+                    <div className="flex justify-between"><span>- Preço compra</span><span>{formatCurrency(precoCompraEfetivo)}</span></div>
+                    <div className="border-t border-slate-200 pt-2 text-base font-semibold flex justify-between"><span>= Margem final</span><span>{formatCurrency(round2(resultadoVisivel?.margem ?? Number.NaN))}</span></div>
+                    <p className="text-xs text-slate-500">Receita líquida após ajustes: {formatCurrency(round2(receitaLiquida))}</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Card>
                 <CardHeader>
