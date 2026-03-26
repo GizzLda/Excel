@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calcMargemCredito, calcMargemPronto, calcPrecoVendaPorCusto, solverPrecoCompraMax } from './calculations';
+import { calcMargemCredito, calcMargemPronto, solverPrecoCompraMax } from './calculations';
 
 describe('fórmulas base', () => {
   it('calcula margem para crédito com custo', () => {
@@ -24,6 +25,7 @@ describe('solver por bisseção', () => {
       incluirCustoCredito: true,
       objetivoTipo: 'eur',
       objetivoValor: -100
+      objetivoValor: 40
     });
 
     expect(result.sucesso).toBe(true);
@@ -37,6 +39,7 @@ describe('solver por bisseção', () => {
       incluirCustoCredito: false,
       objetivoTipo: 'percent',
       objetivoValor: -0.1
+      objetivoValor: 0.1
     });
 
     expect(result.sucesso).toBe(true);
