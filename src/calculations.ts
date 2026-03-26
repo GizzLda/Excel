@@ -125,14 +125,14 @@ export const solverPrecoCompraMax = ({
   tolerancia = 0.01,
   maxIteracoes = 200
 }: SolverParams): SolverResultado => {
-  if (precoVenda <= 0 || objetivoValor < 0) {
+  if (precoVenda <= 0 || !Number.isFinite(objetivoValor)) {
     return {
       sucesso: false,
       precoCompraMax: null,
       margemCalculada: null,
       margemPercentCalculada: null,
       iteracoes: 0,
-      mensagem: 'Parâmetros inválidos: preço de venda deve ser > 0 e objetivo >= 0.'
+      mensagem: 'Parâmetros inválidos: preço de venda deve ser > 0 e objetivo numérico.'
     };
   }
 
@@ -155,7 +155,7 @@ export const solverPrecoCompraMax = ({
   const lowVal = diffToTarget(lower + 1e-9);
   const highVal = diffToTarget(upper);
 
-  if (!Number.isFinite(lowVal) || !Number.isFinite(highVal) || lowVal < 0 || highVal > 0) {
+  if (!Number.isFinite(lowVal) || !Number.isFinite(highVal) || lowVal * highVal > 0) {
     return {
       sucesso: false,
       precoCompraMax: null,

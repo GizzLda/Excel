@@ -23,7 +23,7 @@ describe('solver por bisseção', () => {
       tipoVenda: 'credito',
       incluirCustoCredito: true,
       objetivoTipo: 'eur',
-      objetivoValor: 40
+      objetivoValor: -100
     });
 
     expect(result.sucesso).toBe(true);
@@ -36,7 +36,7 @@ describe('solver por bisseção', () => {
       tipoVenda: 'pronto',
       incluirCustoCredito: false,
       objetivoTipo: 'percent',
-      objetivoValor: 0.1
+      objetivoValor: -0.1
     });
 
     expect(result.sucesso).toBe(true);
